@@ -1,36 +1,36 @@
 import React, { createRef, PureComponent, ReactNode, RefObject } from 'react';
-
-
+import { Socket, io } from "socket.io-client";
 
 interface Props {}
 interface State {
     stream: MediaStream | null,
     otherStream: MediaStream | null,
-    localPeerConnection: RTCPeerConnection | null,
-    remotePeerConnection: RTCPeerConnection | null
+    localPeerConnection: RTCPeerConnection | null
 }
 
 class FullscreenCamera extends PureComponent<Props, State> {
     videoRef: RefObject<HTMLVideoElement>;
     otherVideoRef: RefObject<HTMLVideoElement>;
+    socket: Socket | null;
     constructor(props: Props) {
         super(props)
 
         this.state = {
             stream: null,
             otherStream: null,
-            localPeerConnection: null,
-            remotePeerConnection: null
+            localPeerConnection: null
         }
 
         this.videoRef = createRef<HTMLVideoElement>();
         this.otherVideoRef = createRef<HTMLVideoElement>();
+
+        this.socket = null;
     }
 
     initializeStream = (): Promise<MediaStream> => {
         return new Promise( (resolve, reject) => {
             if (navigator.mediaDevices.getUserMedia) {
-                navigator.mediaDevices.getUserMedia({ video: true })
+                navigator.mediaDevices.getUserMedia({ video: true, audio: true })
                 .then( (stream) => {
                     this.setState({stream: stream});
                     //console.log(stream);
@@ -38,6 +38,7 @@ class FullscreenCamera extends PureComponent<Props, State> {
                         let vid = this.videoRef.current;
                         vid.srcObject = stream;
                         vid.autoplay = true;
+                        vid.muted = true;
                         // let parent = vid.parentElement;
                         // if(parent){
                         //     vid.width = parent.offsetWidth;
@@ -46,14 +47,12 @@ class FullscreenCamera extends PureComponent<Props, State> {
                     }
                     resolve(stream);
                 })
-                .catch( (err) => {
-                    reject("Something went wrong!");
-                });
+                .catch( (err) => { reject("Something went wrong!"); });
             }
         });
     };
 
-    getMediaTracks = (myStream: MediaStream) => {
+    getMediaTracks = (myStream: MediaStream): MediaStream => {
         // Get local media stream tracks.
         const videoTracks = myStream.getVideoTracks();
         const audioTracks = myStream.getAudioTracks();
@@ -62,145 +61,126 @@ class FullscreenCamera extends PureComponent<Props, State> {
         return myStream;
     };
 
-    getOtherPeer = (peerConnection: RTCPeerConnection) => {
-        return (peerConnection === this.state.localPeerConnection) ?
-            this.state.remotePeerConnection : this.state.localPeerConnection;
-    };
-      
-    getPeerName(peerConnection: RTCPeerConnection) {
-        return (peerConnection === this.state.localPeerConnection) ?
-            'localPeerConnection' : 'remotePeerConnection';
-    };
-
     gotRemoteMediaStream = (event: any) => {
-        const mediaStream = event.stream;
         let vid = this.otherVideoRef.current;
+        console.log("Hit gotRemoteMediaStream!: ", event);
         if(vid){
-            vid.srcObject = mediaStream;
-            vid.autoplay = true;
-            this.setState({otherStream: mediaStream});
+            if (event.streams && event.streams[0]) {
+                vid.srcObject = event.streams[0];
+            } else {
+                let s = (!vid.srcObject) ? new MediaStream() : vid.srcObject as MediaStream;
+                vid.srcObject = s;
+                vid.autoplay = true;
+                this.setState({otherStream: s});
+                s.addTrack(event.track);
+            }
         }
-        console.log('Remote peer connection received remote stream.');
+        console.log("remote media stream should be added and visible!")
     };
 
-    handleConnectionChange = (event: any) => {
-        const peerConnection = event.target;
-        console.log('ICE state change event: ', event);
-        console.log(`${this.getPeerName(peerConnection)} ICE state: ` + `${peerConnection.iceConnectionState}.`);
+    handleIceCandidate = (event: RTCPeerConnectionIceEvent) => {
+        console.log('icecandidate event: ', event);
+        if (event.candidate) {
+            if(!this.socket){ console.log("Socket is null in handleIceCandidate!"); return;}
+            this.socket.emit("Candidate", {
+                type: 'candidate',
+                label: event.candidate.sdpMLineIndex,
+                id: event.candidate.sdpMid,
+                candidate: event.candidate.candidate
+            });
+        } else { console.log('No more candidates.'); }
     };
 
-    handleConnection = (event: any) => {
-        const peerConnection = event.target;
-        const iceCandidate = event.candidate;
-
-        if (iceCandidate) {
-            const newIceCandidate = new RTCIceCandidate(iceCandidate);
-            const otherPeer = this.getOtherPeer(peerConnection);
-            
-            if(otherPeer){
-                otherPeer.addIceCandidate(newIceCandidate)
-                    .then(() => {
-                        console.log(`${this.getPeerName(peerConnection)} addIceCandidate success.`);
-                    }).catch((err: any ) => {
-                        console.log(`${this.getPeerName(peerConnection)} failed to add ICE Candidate:\n`+
-                        `${err.toString()}.`);
-                    });
-            } else{ console.log("Peer shouldn't be null here!"); }
-        
-            console.log(`${this.getPeerName(peerConnection)} ICE candidate:\n` +
-                  `${event.candidate.candidate}.`);
-        }
-    };
-
-    createdOffer = (description: RTCSessionDescriptionInit) => {
-        console.log(`Offer from localPeerConnection:\n${description.sdp}`);
-      
-        console.log('localPeerConnection setLocalDescription start.');
-        let localPeerConnection = this.state.localPeerConnection as RTCPeerConnection;
-        let remotePeerConnection = this.state.remotePeerConnection as RTCPeerConnection;
-
-        localPeerConnection.setLocalDescription(description)
-          .then(() => {
-            this.setLocalDescriptionSuccess(localPeerConnection);
-          }).catch(this.setSessionDescriptionError);
-      
-        console.log('remotePeerConnection setRemoteDescription start.');
-        remotePeerConnection.setRemoteDescription(description)
-          .then(() => {
-            this.setRemoteDescriptionSuccess(remotePeerConnection);
-          }).catch(this.setSessionDescriptionError);
-      
-        console.log('remotePeerConnection createAnswer start.');
-        remotePeerConnection.createAnswer()
-          .then(this.createdAnswer)
-          .catch(this.setSessionDescriptionError);
-    }
-
-    createdAnswer = (description: RTCSessionDescriptionInit) => {
-        console.log(`Answer from remotePeerConnection:\n${description.sdp}.`);
-      
-        console.log('remotePeerConnection setLocalDescription start.');
-        let localPeerConnection = this.state.localPeerConnection as RTCPeerConnection;
-        let remotePeerConnection = this.state.remotePeerConnection as RTCPeerConnection;
-
-        remotePeerConnection.setLocalDescription(description)
-          .then(() => {
-            this.setLocalDescriptionSuccess(remotePeerConnection);
-          }).catch(this.setSessionDescriptionError);
-      
-        console.log('localPeerConnection setRemoteDescription start.');
-        localPeerConnection.setRemoteDescription(description)
-          .then(() => {
-            this.setRemoteDescriptionSuccess(localPeerConnection);
-          }).catch(this.setSessionDescriptionError);
-    };
-
-    setSessionDescriptionError = (err: RTCError) => { console.log(`Failed to create session description: ${err.toString()}.`); }
-    setDescriptionSuccess = (peerConnection: RTCPeerConnection, functionName: string) =>{
-        const peerName = this.getPeerName(peerConnection);
-        console.log(`${peerName} ${functionName} complete.`);
-    };
-    setLocalDescriptionSuccess = (peerConnection: RTCPeerConnection) => { 
-        this.setDescriptionSuccess(peerConnection, 'setLocalDescription'); 
-    };
-    setRemoteDescriptionSuccess = (peerConnection: RTCPeerConnection) => { 
-        this.setDescriptionSuccess(peerConnection, 'setRemoteDescription'); 
-    };
-
-    createPeerConnections = () => {
+    createPeerConnection = (myStream: MediaStream|void): MediaStream|void => {
         const servers: RTCConfiguration | undefined = undefined;
 
         let localPeerConnection = new RTCPeerConnection(servers);
-        console.log('Created local peer connection object localPeerConnection.');
 
-        localPeerConnection.addEventListener('icecandidate', this.handleConnection);
-        localPeerConnection.addEventListener(
-            'iceconnectionstatechange', this.handleConnectionChange);
-
-        let remotePeerConnection = new RTCPeerConnection(servers);
-        console.log('Created remote peer connection object remotePeerConnection.');
-
-        remotePeerConnection.addEventListener('icecandidate', this.handleConnection);
-        remotePeerConnection.addEventListener('iceconnectionstatechange', this.handleConnectionChange);
-
-        //add other stream to page
-        remotePeerConnection.addEventListener('addstream', this.gotRemoteMediaStream);
-
+        localPeerConnection.addEventListener('icecandidate', this.handleIceCandidate);
+        localPeerConnection.addEventListener('iceconnectionstatechange', (event) => {
+            if (localPeerConnection.iceConnectionState === "failed" ||
+                localPeerConnection.iceConnectionState === "disconnected" ||
+                localPeerConnection.iceConnectionState === "closed") {
+                // Handle the failure
+                console.log("Something triggered iceConnectionStateChange in createPeerConnection!");
+            }
+        });
+        localPeerConnection.addEventListener('track', this.gotRemoteMediaStream);
+        //localPeerConnection.addEventListener('negotiationneeded', this.handleIceCandidate);
         // Add local stream to connection and create offer to connect.
-        (localPeerConnection as any).addStream(this.state.stream);
-        console.log('Added local stream to localPeerConnection.');
+        if( this.state.stream ){
+            for( const track of this.state.stream.getTracks() ) { (localPeerConnection as any).addTrack(track); }
+        }
 
-        console.log('localPeerConnection createOffer start.');
-
-        localPeerConnection.createOffer({offerToReceiveVideo: true} as RTCOfferOptions)
-            .then(this.createdOffer).catch(this.setSessionDescriptionError);
-        this.setState({localPeerConnection: localPeerConnection, remotePeerConnection: remotePeerConnection})
+        this.setState({localPeerConnection: localPeerConnection})
+        return myStream;
     }
+
+    setupSockets = ( myStream: MediaStream|void): MediaStream|void => {
+        let pc = this.state.localPeerConnection;
+        this.socket = io("ws://localhost:4001", {
+            withCredentials: true,
+            auth: {
+                token: window.localStorage.getItem("sessionToken")
+            }
+        });
+        this.socket.on('message', ( data: string ) => { console.log("message recieved: ", data); });
+        this.socket.emit("Join Event", "General");
+
+        this.socket.on("Initiate Date", () => {
+            if( this.state.localPeerConnection ){
+                this.state.localPeerConnection.createOffer({offerToReceiveVideo: true, offerToReceiveAudio: true} as RTCOfferOptions)
+                    .then( (sessionDescription: RTCSessionDescriptionInit) => {
+                        if( pc && this.socket ){
+                            pc.setLocalDescription(sessionDescription);
+                            console.log("Offer successfully created!");
+                            this.socket.emit("Offer", sessionDescription)
+                        }
+                    })
+                    .catch( (err) => { console.log("Failed to create offer!: ", err); } );
+            } else { console.log("localPeerConnection state variable is null when trying to create offer!"); }
+        });
+
+        this.socket.on("Offer", (sessionDescription: RTCSessionDescriptionInit) => {
+            if(pc){
+                pc.setRemoteDescription(new RTCSessionDescription(sessionDescription));
+                pc.createAnswer()
+                    .then( (mySessionDescription) => {
+                        if(pc && this.socket){
+                            pc.setLocalDescription(mySessionDescription);
+                            console.log("Answer created successfully", mySessionDescription);
+                            this.socket.emit("Answer", mySessionDescription)
+                        } else{ console.log("localPeerConnection state variable is null when trying to create answer!"); }
+                    })
+                    .catch( (err) => { console.log("Failed to create answer!: ", err); } );
+            } else{ console.log("localPeerConnection state variable is null in onOffer!"); }
+        });
+
+        this.socket.on("Answer", (sessionDescription: RTCSessionDescriptionInit) => {
+            if(pc){
+                pc.setRemoteDescription(new RTCSessionDescription(sessionDescription));
+                console.log("Answer recieved and remote description set!");
+            } else{ console.log("localPeerConnection state variable is null in onAnswer!"); }
+        });
+
+        this.socket.on("Candidate", (data: any) => {
+            if(pc){
+                pc.addIceCandidate( new RTCIceCandidate({
+                    sdpMLineIndex: data.label,
+                    candidate: data.candidate
+                }) );
+                console.log("Ice Candidate recieved and added to Connection!");
+            } else{ console.log("localPeerConnection is null in onCandidate!"); }
+        });
+
+        return myStream;
+    };
 
     componentDidMount = () => {
         this.initializeStream()
             .then(this.getMediaTracks, (err) => { console.log(err); } )
-            .then(this.createPeerConnections);
+            .then(this.createPeerConnection)
+            .then(this.setupSockets);
     };
 
     componentWillUnmount = () => {
