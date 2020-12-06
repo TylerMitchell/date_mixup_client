@@ -18,6 +18,7 @@ import Messager from "./pages/Messager";
 
 import Footer from "./sections/Footer";
 
+import URLS from "./helpers/environment";
 type Props = { 
 
 };
@@ -73,7 +74,7 @@ class App extends React.Component<Props, State> {
       (this.state.user && this.state.user.id) ? this.state.user.id : null;
 
     if(id){
-      fetch("http://localhost:4000/profile", {
+      fetch(URLS.APIURL + "/profile", {
         method: "GET",
         headers: new Headers({
             "content-Type": "application/json",
@@ -90,7 +91,7 @@ class App extends React.Component<Props, State> {
   }
 
   updateProfileData = (profile: DB_Profile): void => {
-    fetch("http://localhost:4000/profile", {
+    fetch(URLS.APIURL + "/profile", {
       method: "PUT",
       body: JSON.stringify({ profile: profile }),
       headers: new Headers({
@@ -109,7 +110,7 @@ class App extends React.Component<Props, State> {
   loginToApp = (user: User) => {
     console.log("Login Function Hit!");
 
-    fetch("http://localhost:4000/user/login", {
+    fetch(URLS.APIURL + "/user/login", {
       method: "POST",
       body: JSON.stringify({ user: user }),
       headers: new Headers({
@@ -124,7 +125,7 @@ class App extends React.Component<Props, State> {
       tUser.createdAt = new Date(tUser.createdAt);
       tUser.updatedAt = new Date(tUser.updatedAt);
 
-      fetch("http://localhost:4000/profile", {
+      fetch(URLS.APIURL + "/profile", {
         method: "GET",
         headers: new Headers({
             "content-Type": "application/json",
@@ -150,7 +151,7 @@ class App extends React.Component<Props, State> {
   registerToApp = (user: User, profile: Basic_Profile) => {
     console.log("Register Function Hit!");
 
-    fetch("http://localhost:4000/user/register", {
+    fetch(URLS.APIURL + "/user/register", {
       method: "POST",
       body: JSON.stringify({ user: user, profile: profile }),
       headers: new Headers({

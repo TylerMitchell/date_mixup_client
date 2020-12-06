@@ -1,6 +1,8 @@
 import React, { createRef, PureComponent, ReactNode, RefObject } from 'react';
 import { Socket, io } from "socket.io-client";
 
+import URLS from "../helpers/environment";
+
 interface Props {}
 interface State {
     stream: MediaStream | null,
@@ -118,7 +120,7 @@ class FullscreenCamera extends PureComponent<Props, State> {
 
     setupSockets = ( myStream: MediaStream|void): MediaStream|void => {
         let pc = this.state.localPeerConnection;
-        this.socket = io("ws://localhost:4001", {
+        this.socket = io(URLS.WS_APIURL, {
             withCredentials: true,
             auth: {
                 token: window.localStorage.getItem("sessionToken")

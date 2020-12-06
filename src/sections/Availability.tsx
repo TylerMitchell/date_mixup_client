@@ -12,7 +12,7 @@ import Grid from "@material-ui/core/Grid";
 import Button from "@material-ui/core/Button";
 
 import AvailabilityTable from "../components/AvailabilityTable";
-
+import URLS from "../helpers/environment";
 
 import {timeToString} from "../util"
 
@@ -60,7 +60,7 @@ class Availability extends Component<Props, State> {
                 timeTo: timeTo
             }])
         }, () => { 
-            fetch("http://localhost:4000/profile/availability", {
+            fetch(URLS.APIURL + "/profile/availability", {
                 method: "POST",
                 body: JSON.stringify({ 
                     availability: { 
@@ -90,7 +90,7 @@ class Availability extends Component<Props, State> {
             this.setState({ 
                 availabilityList: list 
             }, () => {
-                fetch("http://localhost:4000/profile/availability", {
+                fetch(URLS.APIURL + "/profile/availability", {
                     method: "DELETE",
                     body: JSON.stringify({ availabilityId: this.availabilityIndexToId(i) }),
                     headers: new Headers({
@@ -106,7 +106,7 @@ class Availability extends Component<Props, State> {
 
     componentDidMount = () => {
         if(this.props.profileData){
-            fetch(`http://localhost:4000/profile/availability/${this.props.profileData.id}`, {
+            fetch(URLS.APIURL + `/profile/availability/${this.props.profileData.id}`, {
                 method: "GET",
                 headers: new Headers({
                     "Content-Type": "application/json",

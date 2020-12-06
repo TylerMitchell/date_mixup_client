@@ -13,6 +13,8 @@ import DialogContent from '@material-ui/core/DialogContent';
 import DialogContentText from '@material-ui/core/DialogContentText';
 import DialogTitle from '@material-ui/core/DialogTitle';
 
+import URLS from "../helpers/environment";
+
 interface Props extends RouteComponentProps<any>{ 
     userData: DB_User | null,
     logoutFunc: ()=>void
@@ -47,11 +49,10 @@ class Account extends PureComponent<Props, State> {
         if( this.state.newPassword && /([A-Z]|[a-z]|[0-9]){8,}/.test(this.state.newPassword) ){ return true;
         } else{ alert("Password must be 8+ characters long using only alphanumeric characters!"); return false; }
     }
-
     closePasswordDialog = (mode: string) => {
         if( mode === "Cancel" ) { this.setState({changePasswordOpen: false}); return; }
         else if( mode === "Change" && this.passwordValidator() && this.state.newPassword === this.state.newPasswordConfirm ){
-            fetch("http://localhost:4000/user/changepassword", {
+            fetch(URLS.APIURL + "/user/changepassword", {
                 method: "PUT",
                 body: JSON.stringify({ user: { oldPassword: this.state.oldPassword, newPassword: this.state.newPassword } }),
                 headers: new Headers({
@@ -69,7 +70,7 @@ class Account extends PureComponent<Props, State> {
     closeAccountDialog = (mode: string) => {
         if( mode === "Cancel" ) { this.setState({deleteAccountOpen: false}); return; }
         else if( this.props.userData && (this.state.email === this.props.userData.email) ){
-            fetch("http://localhost:4000/user/deleteaccount", {
+            fetch(URLS.APIURL + "/user/deleteaccount", {
                 method: "DELETE",
                 body: JSON.stringify({ user: { password: this.state.password, email: this.state.email } }),
                 headers: new Headers({
