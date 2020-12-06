@@ -120,12 +120,7 @@ class FullscreenCamera extends PureComponent<Props, State> {
 
     setupSockets = ( myStream: MediaStream|void): MediaStream|void => {
         let pc = this.state.localPeerConnection;
-        this.socket = io(URLS.WS_APIURL, {
-            withCredentials: true,
-            auth: {
-                token: window.localStorage.getItem("sessionToken")
-            }
-        });
+        this.socket = io(URLS.WS_APIURL);
         this.socket.on('message', ( data: string ) => { console.log("message recieved: ", data); });
         this.socket.emit("Join Event", "General");
 
