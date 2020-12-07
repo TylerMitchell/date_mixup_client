@@ -109,14 +109,10 @@ class FullscreenCamera extends PureComponent<Props, State> {
         } else { console.log('No more candidates.'); }
     };
 
-    createPeerConnection = (myStream: MediaStream|void): MediaStream|void => {
-
-        let localPeerConnection = new RTCPeerConnection({
-            'iceServers': [
-                { 'urls': 'stun:stun.l.google.com:19302' }
-            ]
-        });
-
+    createPeerConnection = (servers: any): void => {
+        console.log("creating peer connection: ", servers);
+        let localPeerConnection = new RTCPeerConnection(servers);
+        console.log("peerconnection: ", localPeerConnection);
         localPeerConnection.addEventListener('icecandidate', this.handleIceCandidate);
         localPeerConnection.addEventListener('iceconnectionstatechange', (event) => {
             if (localPeerConnection.iceConnectionState === "failed" ||
@@ -140,11 +136,9 @@ class FullscreenCamera extends PureComponent<Props, State> {
         }
 
         this.setState({localPeerConnection: localPeerConnection})
-        return myStream;
     }
 
     setupSockets = ( myStream: MediaStream|void): MediaStream|void => {
-        let pc = this.state.localPeerConnection;
         this.socket = io(URLS.WS_APIURL, {
             auth: {
                 token: window.sessionStorage.getItem("sessionToken")
@@ -154,8 +148,9 @@ class FullscreenCamera extends PureComponent<Props, State> {
         this.socket.emit("Join Event", "General");
 
         this.socket.on("Initiate Date", () => {
-            if( this.state.localPeerConnection ){
-                this.state.localPeerConnection.createOffer({offerToReceiveVideo: true, offerToReceiveAudio: true} as RTCOfferOptions)
+            let pc = this.state.localPeerConnection;
+            if( pc ){
+                pc.createOffer({offerToReceiveVideo: true, offerToReceiveAudio: true} as RTCOfferOptions)
                     .then( (sessionDescription: RTCSessionDescriptionInit) => {
                         if( pc && this.socket ){
                             pc.setLocalDescription(sessionDescription);
@@ -168,6 +163,7 @@ class FullscreenCamera extends PureComponent<Props, State> {
         });
 
         this.socket.on("Offer", (sessionDescription: RTCSessionDescriptionInit) => {
+            let pc = this.state.localPeerConnection;
             if(pc){
                 pc.setRemoteDescription(new RTCSessionDescription(sessionDescription));
                 pc.createAnswer()
@@ -183,6 +179,7 @@ class FullscreenCamera extends PureComponent<Props, State> {
         });
 
         this.socket.on("Answer", (sessionDescription: RTCSessionDescriptionInit) => {
+            let pc = this.state.localPeerConnection;
             if(pc){
                 pc.setRemoteDescription(new RTCSessionDescription(sessionDescription));
                 console.log("Answer recieved and remote description set!");
@@ -190,6 +187,7 @@ class FullscreenCamera extends PureComponent<Props, State> {
         });
 
         this.socket.on("Candidate", (data: any) => {
+            let pc = this.state.localPeerConnection;
             if(pc){
                 pc.addIceCandidate( new RTCIceCandidate({
                     sdpMLineIndex: data.label,
@@ -214,6 +212,11 @@ class FullscreenCamera extends PureComponent<Props, State> {
             this.requestId = requestId;
         });
 
+        this.socket.on("TURN Servers", (servers: any) => {
+            console.log("Recieved TURN Servers");
+            this.createPeerConnection(servers);
+        });
+
         return myStream;
     };
 
@@ -221,7 +224,6 @@ class FullscreenCamera extends PureComponent<Props, State> {
         this.setState({ contactRequestSent: false, contactRequestRecieved: false, contactRequestAccepted: false });
         this.initializeStream()
             .then(this.getMediaTracks, (err) => { console.log(err); } )
-            .then(this.createPeerConnection)
             .then(this.setupSockets);
     };
 
