@@ -119,7 +119,7 @@ class FullscreenCamera extends PureComponent<Props, State> {
                 localPeerConnection.iceConnectionState === "disconnected" ||
                 localPeerConnection.iceConnectionState === "closed") {
                 // Handle the failure
-                console.log("Something triggered iceConnectionStateChange in createPeerConnection!");
+                console.log(`Something triggered iceConnectionStateChange in createPeerConnection! ${localPeerConnection.iceConnectionState} ${event}`);
             }
         });
         localPeerConnection.addEventListener('track', this.gotRemoteMediaStream);
