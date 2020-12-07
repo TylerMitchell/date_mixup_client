@@ -3,10 +3,10 @@ export default () =>{
     const socket = io("ws://localhost:4001", {
         withCredentials: true,
         extraHeaders: {
-          "Authorization": window.localStorage.getItem("sessionToken")
+          "Authorization": window.sessionStorage.getItem("sessionToken")
         },
         auth: {
-            token: window.localStorage.getItem("sessionToken")
+            token: window.sessionStorage.getItem("sessionToken")
         }
     });
 

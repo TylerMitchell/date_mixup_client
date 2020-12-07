@@ -78,7 +78,7 @@ class App extends React.Component<Props, State> {
         method: "GET",
         headers: new Headers({
             "content-Type": "application/json",
-            "Authorization": window.localStorage.getItem("sessionToken") as string
+            "Authorization": window.sessionStorage.getItem("sessionToken") as string
         })
       })
       .then( (res) => res.json() )
@@ -96,7 +96,7 @@ class App extends React.Component<Props, State> {
       body: JSON.stringify({ profile: profile }),
       headers: new Headers({
           "content-Type": "application/json",
-          "Authorization": window.localStorage.getItem("sessionToken") as string
+          "Authorization": window.sessionStorage.getItem("sessionToken") as string
       })
     })
     .then( (res) => res.json() )
@@ -118,7 +118,7 @@ class App extends React.Component<Props, State> {
       })
     }).then( (res) => res.json() )
     .then( (json) => {
-      window.localStorage.setItem( "sessionToken", json.sessionToken );
+      window.sessionStorage.setItem( "sessionToken", json.sessionToken );
 
       let tUser = json.user;
       delete tUser.passwordhash;
@@ -145,7 +145,7 @@ class App extends React.Component<Props, State> {
   }
   logoutOfApp = () => {
     this.setState({ isLoggedIn: false });
-    window.localStorage.setItem("sessionToken", "");
+    window.sessionStorage.setItem("sessionToken", "");
   }
 
   registerToApp = (user: User, profile: Basic_Profile) => {

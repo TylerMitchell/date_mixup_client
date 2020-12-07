@@ -57,7 +57,7 @@ class Account extends PureComponent<Props, State> {
                 body: JSON.stringify({ user: { oldPassword: this.state.oldPassword, newPassword: this.state.newPassword } }),
                 headers: new Headers({
                     "content-Type": "application/json",
-                    "Authorization": window.localStorage.getItem("sessionToken") as string
+                    "Authorization": window.sessionStorage.getItem("sessionToken") as string
                 })
             })
             .then( (res) => res.json() )
@@ -75,7 +75,7 @@ class Account extends PureComponent<Props, State> {
                 body: JSON.stringify({ user: { password: this.state.password, email: this.state.email } }),
                 headers: new Headers({
                     "content-Type": "application/json",
-                    "Authorization": window.localStorage.getItem("sessionToken") as string
+                    "Authorization": window.sessionStorage.getItem("sessionToken") as string
                 })
             })
             .then( (res) => res.json() )

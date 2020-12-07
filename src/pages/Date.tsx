@@ -31,6 +31,7 @@ class Date extends PureComponent<Props, State> {
     }
 
     handleJoinEvent = (e: MouseEvent) => { this.setState({isEventMode: true}); }
+    handleLeaveEvent = () => { this.setState({isEventMode: false}); }
 
     render(): ReactNode {
         return (
@@ -54,7 +55,7 @@ class Date extends PureComponent<Props, State> {
                         <Button variant="outlined" color="primary" onClick={this.handleJoinEvent}>Join Event!</Button>
                     </FormControl>
                 </Container>
-                { this.state.isEventMode ? <FullscreenCamera /> : <TestCamera /> }
+                { this.state.isEventMode ? <FullscreenCamera leaveEventFunc={this.handleLeaveEvent} /> : <TestCamera /> }
             </div>
         )
     }

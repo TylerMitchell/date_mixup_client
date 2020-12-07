@@ -18,17 +18,13 @@ class TestCamera extends PureComponent<Props, State> {
 
     componentDidMount = () => {
         if (navigator.mediaDevices.getUserMedia) {
-            navigator.mediaDevices.getUserMedia({ video: true })
+            navigator.mediaDevices.getUserMedia({ video: true, audio: true })
             .then( (stream) => {
                 if(this.videoRef.current){
                     let vid = this.videoRef.current;
                     vid.srcObject = stream;
                     vid.autoplay = true;
-                    let parent = vid.parentElement;
-                    if(parent){
-                        vid.width = parent.offsetWidth;
-                        vid.height = parent.offsetHeight;
-                    }
+                    vid.muted = true;
                 }
             })
             .catch( (err) => {

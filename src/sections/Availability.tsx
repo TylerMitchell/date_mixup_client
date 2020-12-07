@@ -72,7 +72,7 @@ class Availability extends Component<Props, State> {
                 }),
                 headers: new Headers({
                     "Content-Type": "application/json",
-                    "Authorization": window.localStorage.getItem("sessionToken") as string
+                    "Authorization": window.sessionStorage.getItem("sessionToken") as string
                 })
             }).then( (res) => { return res.json(); }, (err) => { console.log( "Error: ", err ); } )
             .then( (json) => {
@@ -95,7 +95,7 @@ class Availability extends Component<Props, State> {
                     body: JSON.stringify({ availabilityId: this.availabilityIndexToId(i) }),
                     headers: new Headers({
                         "Content-Type": "application/json",
-                        "Authorization": window.localStorage.getItem("sessionToken") as string
+                        "Authorization": window.sessionStorage.getItem("sessionToken") as string
                     })
                 }).then( (res) => { return res.json(); }, (err) => { console.log( "Error: ", err ); } )
                 .then( (json) => {
@@ -110,7 +110,7 @@ class Availability extends Component<Props, State> {
                 method: "GET",
                 headers: new Headers({
                     "Content-Type": "application/json",
-                    "Authorization": window.localStorage.getItem("sessionToken") as string
+                    "Authorization": window.sessionStorage.getItem("sessionToken") as string
                 })
             }).then( (res) => { return res.json(); }, (err) => { console.log( "Error: ", err ); } )
             .then( (json) => {

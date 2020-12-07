@@ -1,32 +1,48 @@
 import React, { createRef, PureComponent, ReactNode, RefObject } from 'react';
 import { Socket, io } from "socket.io-client";
 
-import URLS from "../helpers/environment";
+import Button from "@material-ui/core/Button"
+import Grid from "@material-ui/core/Grid"
 
-interface Props {}
+import URLS from "../helpers/environment";
+import { DB_Profile } from '../App';
+
+interface Props {
+    leaveEventFunc: ()=>void
+}
 interface State {
     stream: MediaStream | null,
     otherStream: MediaStream | null,
-    localPeerConnection: RTCPeerConnection | null
+    localPeerConnection: RTCPeerConnection | null,
+    otherProfile: DB_Profile | null,
+    contactRequestRecieved: boolean,
+    contactRequestSent: boolean,
+    contactRequestAccepted: boolean
 }
 
 class FullscreenCamera extends PureComponent<Props, State> {
     videoRef: RefObject<HTMLVideoElement>;
     otherVideoRef: RefObject<HTMLVideoElement>;
     socket: Socket | null;
+    requestId: number | null;
     constructor(props: Props) {
         super(props)
 
         this.state = {
             stream: null,
             otherStream: null,
-            localPeerConnection: null
+            localPeerConnection: null,
+            otherProfile: null,
+            contactRequestRecieved: false,
+            contactRequestSent: false,
+            contactRequestAccepted: false
         }
 
         this.videoRef = createRef<HTMLVideoElement>();
         this.otherVideoRef = createRef<HTMLVideoElement>();
 
         this.socket = null;
+        this.requestId = null;
     }
 
     initializeStream = (): Promise<MediaStream> => {
@@ -94,9 +110,15 @@ class FullscreenCamera extends PureComponent<Props, State> {
     };
 
     createPeerConnection = (myStream: MediaStream|void): MediaStream|void => {
-        const servers: RTCConfiguration | undefined = undefined;
 
-        let localPeerConnection = new RTCPeerConnection(servers);
+        let localPeerConnection = new RTCPeerConnection({
+            'iceServers': [
+                { 'urls': 'stun:stun.l.google.com:19302' },
+                { 'urls': 'stun:sip1.lakedestiny.cordiaip.com' },
+                { 'urls': 'stun:stun.counterpath.net' },
+                { 'urls': 'stun.noc.ams-ix.net' },
+            ]
+        });
 
         localPeerConnection.addEventListener('icecandidate', this.handleIceCandidate);
         localPeerConnection.addEventListener('iceconnectionstatechange', (event) => {
@@ -108,7 +130,13 @@ class FullscreenCamera extends PureComponent<Props, State> {
             }
         });
         localPeerConnection.addEventListener('track', this.gotRemoteMediaStream);
-        //localPeerConnection.addEventListener('negotiationneeded', this.handleIceCandidate);
+        localPeerConnection.addEventListener('negotiationneeded', () => {
+            // localPeerConnection.createOffer().then( (offer) => {
+            //     localPeerConnection.setLocalDescription(offer);
+            //     if(this.socket) { this.socket.emit("Offer", offer); }
+            //     else { console.log("Socket was null in negotiationneeded event!"); }
+            // }).catch( (err) => { console.log("Failed to create offer! ", err); } );
+        });
         // Add local stream to connection and create offer to connect.
         if( this.state.stream ){
             for( const track of this.state.stream.getTracks() ) { (localPeerConnection as any).addTrack(track); }
@@ -122,7 +150,7 @@ class FullscreenCamera extends PureComponent<Props, State> {
         let pc = this.state.localPeerConnection;
         this.socket = io(URLS.WS_APIURL, {
             auth: {
-                token: window.localStorage.getItem("sessionToken")
+                token: window.sessionStorage.getItem("sessionToken")
             }
         });
         this.socket.on('message', ( data: string ) => { console.log("message recieved: ", data); });
@@ -174,10 +202,26 @@ class FullscreenCamera extends PureComponent<Props, State> {
             } else{ console.log("localPeerConnection is null in onCandidate!"); }
         });
 
+        this.socket.on("End Date Client", (closeData: any) => {
+            this.closeCall();
+            console.log( "Date ended because : " + closeData.reason );
+        })
+
+        this.socket.on("Other Profile", (profile: DB_Profile) => {
+            this.setState({ otherProfile: profile });
+        });
+
+        this.socket.on("Contact Exchange Requested", (requestId: number) => {
+            //Button Changes on partner client asking them to accept request
+            this.setState({ contactRequestRecieved: true });
+            this.requestId = requestId;
+        });
+
         return myStream;
     };
 
     componentDidMount = () => {
+        this.setState({ contactRequestSent: false, contactRequestRecieved: false, contactRequestAccepted: false });
         this.initializeStream()
             .then(this.getMediaTracks, (err) => { console.log(err); } )
             .then(this.createPeerConnection)
@@ -190,6 +234,72 @@ class FullscreenCamera extends PureComponent<Props, State> {
             vid.srcObject = null;
             vid.autoplay = false;
         }
+        vid = this.otherVideoRef.current;
+        if(vid){ 
+            vid.srcObject = null;
+            vid.autoplay = false;
+        }
+        this.closeCall();
+        if(this.socket){ this.socket.close(); }
+    }
+
+    closeCall = () => {
+        if(this.socket && this.state.localPeerConnection){
+            this.socket.emit("End Date Client", { reason: "One of the Clients Hit End Date Button" } );
+            this.state.localPeerConnection.close();
+            this.setState({ localPeerConnection: null, otherStream: null });
+
+            let vid = this.otherVideoRef.current;
+            if(vid){ vid.srcObject = null; }
+
+            console.log("remote media stream should be removed")
+        }
+    }
+
+    initiateContactExchange = () => {
+        //send REST request to /request
+        //Then when it returns, emit socket message to partner containing request id
+        if(this.state.otherProfile){
+            fetch(URLS.APIURL + "/contacts/request", {
+                method: "POST",
+                body: JSON.stringify({ contactRequest: { dateSent: new Date(), toProfileId: this.state.otherProfile.id} }),
+                headers: new Headers({
+                    "content-Type": "application/json",
+                    "Authorization": window.sessionStorage.getItem("sessionToken") as string
+                })
+            })
+            .then( (res) => res.json() )
+            .then( (json) => { 
+                if( this.socket ){
+                    this.socket.emit("Contact Exchange Requested", json.request.id);
+                    this.setState({ contactRequestSent: true });
+                } else{ console.log("Socket was null in initiateContactExchange()!"); }
+                console.log(json); 
+            })
+            .catch( (err) => { console.log( "Error: ", err ); } );
+        } else{ console.log("Other profile was null in initiateContactExchange()!"); }
+    }
+
+    acceptContactExchange = () => {
+        //if they accept the request, send REST request to /accept
+        if( this.requestId ){
+            fetch(URLS.APIURL + "/contacts/accept", {
+                method: "PUT",
+                body: JSON.stringify({ requestId: this.requestId }),
+                headers: new Headers({
+                    "content-Type": "application/json",
+                    "Authorization": window.sessionStorage.getItem("sessionToken") as string
+                })
+            })
+            .then( (res) => res.json() )
+            .then( (json) => { 
+                if( this.socket ){
+                    this.socket.emit("Contact Exchange Accepted", json.request.id);
+                    this.setState({ contactRequestAccepted: true })
+                } else{ console.log("Socket was null in acceptContactExchange()!"); }
+            })
+            .catch( (err) => { console.log( "Error: ", err ); } );
+        } else{ console.log("RequestId was null in acceptContactExchange"); }
     }
 
     render(): ReactNode {
@@ -197,6 +307,21 @@ class FullscreenCamera extends PureComponent<Props, State> {
             <>
                 <video ref={this.videoRef}></video>
                 <video ref={this.otherVideoRef}></video>
+                <Grid container xs={12} justify={"center"} >
+                    <Grid item xs={4} >
+                        { this.state.contactRequestRecieved ? 
+                            this.state.contactRequestAccepted ? 
+                                <Button color="secondary" variant="outlined" disabled >Accepted</Button> :
+                                <Button color="secondary" variant="outlined" onClick={this.acceptContactExchange} >Accept Request!</Button>
+                            :
+                            this.state.contactRequestSent ? 
+                                <Button color="secondary" variant="outlined" disabled >Request Sent</Button> :
+                                <Button color="primary" variant="outlined" onClick={this.initiateContactExchange} >Exchange Contacts</Button>
+                        }
+                        <Button color="primary" variant="outlined" onClick={this.closeCall} >End Date</Button>
+                        <Button color="secondary" variant="outlined" onClick={this.props.leaveEventFunc}>Leave event</Button>
+                    </Grid>
+                </Grid>
             </>
         )
     }
