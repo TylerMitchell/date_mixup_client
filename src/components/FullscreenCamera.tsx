@@ -113,10 +113,7 @@ class FullscreenCamera extends PureComponent<Props, State> {
 
         let localPeerConnection = new RTCPeerConnection({
             'iceServers': [
-                { 'urls': 'stun:stun.l.google.com:19302' },
-                { 'urls': 'stun:sip1.lakedestiny.cordiaip.com' },
-                { 'urls': 'stun:stun.counterpath.net' },
-                { 'urls': 'stun.noc.ams-ix.net' },
+                { 'urls': 'stun:stun.l.google.com:19302' }
             ]
         });
 
