@@ -2,6 +2,7 @@ import React from 'react';
 import './App.css';
 import { BrowserRouter as Router, Switch, Route } from "react-router-dom";
 
+import { Socket, io } from "socket.io-client";
 import IconBar from "./sections/IconBar";
 
 import Splash from "./pages/Splash";
@@ -26,7 +27,11 @@ type Props = {
 type State = { 
   isLoggedIn: Boolean,
   user: DB_User | null,
-  profile: DB_Profile | null
+  profile: DB_Profile | null,
+  socket: Socket|null,
+  friendProfilesArr: Array<DB_Profile>,
+  onlineProfileIds: Array<number>;
+
 };
 
 export type User = {
@@ -39,9 +44,9 @@ export type User = {
 };
 
 export type DB_Fields = {
-  id?: number,
-  createdAt?: Date,
-  updatedAt?: Date
+  id: number,
+  createdAt: Date,
+  updatedAt: Date
 }
 
 export type Basic_Profile = {
@@ -62,9 +67,43 @@ class App extends React.Component<Props, State> {
     this.state = { 
       isLoggedIn: false,
       user: null,
-      profile: null
+      profile: null,
+      socket: null,
+      friendProfilesArr: [],
+      onlineProfileIds: []
     };
   }
+
+  getFriendProfiles = ( friendProfileIdArr: Array<number> ):void => {
+    fetch(URLS.APIURL + "/profile/getprofiles/", {
+      method: "POST",
+      body: JSON.stringify({ profileIdArr: friendProfileIdArr }),
+      headers: new Headers({
+          "content-Type": "application/json",
+          "Authorization": window.sessionStorage.getItem("sessionToken") as string
+      })
+    })
+    .then( (res) => res.json() )
+    .then( (json) => {
+        console.log("getprofiles route response: ", json);
+        this.setState({ friendProfilesArr: json.profiles as Array<DB_Profile> }, () => { this.getOnlineStatus(json.profiles) });
+    })
+    .catch( (err) => { console.log( "Error: ", err ); } );
+  }
+
+  getOnlineStatus = ( profiles: Array<DB_Profile> ) => {
+    console.log("Get Online Status(profiles): ", profiles);
+    let profileIds: Array<number> = [];
+    profiles.forEach( (profile) => { profileIds.push(profile.id); });
+    if(this.state.socket){
+      this.state.socket.emit("Check Online Status For Profiles", profileIds);
+
+      this.state.socket.on("Online Profiles", ( profileIdArr: Array<number> ) => {
+          console.log("Show these profiles online: ", profileIdArr);
+          this.setState({ onlineProfileIds: profileIdArr });
+      });
+    }
+}
 
   getProfileData = (id: number | null = null): void => {
     //this kind of stuff makes me hate typescript.
@@ -136,6 +175,15 @@ class App extends React.Component<Props, State> {
       .then( (json) => {
         console.log(json.profile);
         this.setState({ profile: json.profile as DB_Profile, isLoggedIn: true });
+
+        if(this.state.socket){ this.state.socket.close(); }
+        this.setState({
+          socket: io(URLS.WS_APIURL, {
+              auth: {
+                  token: window.sessionStorage.getItem("sessionToken")
+              }
+          })
+        })
       })
       .catch( (err) => { console.log( "Error: ", err ); } );
 
@@ -166,7 +214,15 @@ class App extends React.Component<Props, State> {
     }).catch( (err) => { console.log( "Error: ", err ); } );
   }
 
+  componentDidMount = () => {
+  }
+
+  componentWillUnmount = () => {
+    if(this.state.socket){ this.state.socket.close(); }
+  }
+
   render() {
+    let sock: Socket = this.state.socket as Socket;
     return (
       <div className="App">
         <Router >
@@ -186,11 +242,19 @@ class App extends React.Component<Props, State> {
                 />
               </Route>
               <Route path="/events" ><Events /></Route>
-              <Route path="/contacts" ><Contacts /></Route>
-              <Route path="/date"><DatePage /></Route>
+              <Route path="/contacts" >
+                <Contacts 
+                  socket={sock} 
+                  userData={this.state.user} 
+                  getFriendsFunc={this.getFriendProfiles}
+                  profilesArr={this.state.friendProfilesArr}
+                  onlineProfileIds={this.state.onlineProfileIds}
+                />
+              </Route>
+              <Route path="/date"><DatePage socket={sock}/></Route>
               <Route path="/account"><Account userData={this.state.user} logoutFunc={this.logoutOfApp}/></Route>
-              <Route path="/messager"><Messager /></Route>
-              <Route exact path="/"><DatePage /></Route>
+              <Route path="/messager/:id"><Messager socket={sock} profilesArr={this.state.friendProfilesArr}/></Route>
+              <Route exact path="/"><DatePage socket={sock}/></Route>
             </> : <Route path="/"><Splash loginFunc={this.loginToApp} registerFunc={this.registerToApp} /></Route> }
           </Switch>
           <br />

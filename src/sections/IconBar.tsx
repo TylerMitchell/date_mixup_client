@@ -40,6 +40,7 @@ class IconBar extends Component<Props, State> {
                     textColor="primary"
                     aria-label="icon tabs example"
                 >
+                    <Tab label="Date Mixup" value="/date" aria-label="datePage" />
                     <Tab icon={<AccountCircle />} label="Profile" value="/profile" aria-label="accountCircle" />
                     <Tab icon={<EventNote />} label="Events" value="/events" aria-label="eventNote" />
                     <Tab icon={<Contacts />} label="Contacts" value="/contacts" aria-label="contacts" />

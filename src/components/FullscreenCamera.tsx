@@ -8,7 +8,8 @@ import URLS from "../helpers/environment";
 import { DB_Profile } from '../App';
 
 interface Props {
-    leaveEventFunc: ()=>void
+    leaveEventFunc: ()=>void,
+    socket: Socket
 }
 interface State {
     stream: MediaStream | null,
@@ -23,7 +24,7 @@ interface State {
 class FullscreenCamera extends PureComponent<Props, State> {
     videoRef: RefObject<HTMLVideoElement>;
     otherVideoRef: RefObject<HTMLVideoElement>;
-    socket: Socket | null;
+    socket: Socket;
     requestId: number | null;
     constructor(props: Props) {
         super(props)
@@ -41,7 +42,7 @@ class FullscreenCamera extends PureComponent<Props, State> {
         this.videoRef = createRef<HTMLVideoElement>();
         this.otherVideoRef = createRef<HTMLVideoElement>();
 
-        this.socket = null;
+        this.socket = props.socket;
         this.requestId = null;
     }
 
@@ -139,13 +140,16 @@ class FullscreenCamera extends PureComponent<Props, State> {
     }
 
     setupSockets = ( myStream: MediaStream|void): MediaStream|void => {
-        this.socket = io(URLS.WS_APIURL, {
-            auth: {
-                token: window.sessionStorage.getItem("sessionToken")
-            }
-        });
         this.socket.on('message', ( data: string ) => { console.log("message recieved: ", data); });
-        this.socket.emit("Join Event", "General");
+
+        this.socket.emit("Get TURN Servers");
+
+        this.socket.on("TURN Servers", (servers: any) => {
+            console.log("Recieved TURN Servers");
+            this.createPeerConnection(servers);
+
+            this.socket.emit("Join Event", "General");
+        })
 
         this.socket.on("Initiate Date", () => {
             let pc = this.state.localPeerConnection;
@@ -212,15 +216,12 @@ class FullscreenCamera extends PureComponent<Props, State> {
             this.requestId = requestId;
         });
 
-        this.socket.on("TURN Servers", (servers: any) => {
-            console.log("Recieved TURN Servers");
-            this.createPeerConnection(servers);
-        });
-
         return myStream;
     };
 
     componentDidMount = () => {
+        this.socket = this.props.socket;
+
         this.setState({ contactRequestSent: false, contactRequestRecieved: false, contactRequestAccepted: false });
         this.initializeStream()
             .then(this.getMediaTracks, (err) => { console.log(err); } )
@@ -239,7 +240,6 @@ class FullscreenCamera extends PureComponent<Props, State> {
             vid.autoplay = false;
         }
         this.closeCall();
-        if(this.socket){ this.socket.close(); }
     }
 
     closeCall = () => {

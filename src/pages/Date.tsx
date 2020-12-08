@@ -1,4 +1,5 @@
 import React, { MouseEvent, ChangeEvent, PureComponent, ReactNode } from 'react'
+import { Socket } from "socket.io-client";
 
 import Select from "@material-ui/core/Select";
 import FormControl from "@material-ui/core/FormControl";
@@ -10,7 +11,9 @@ import Container from "@material-ui/core/Container";
 import TestCamera from "../components/TestCamera";
 import FullscreenCamera from "../components/FullscreenCamera";
 
-interface Props {}
+interface Props {
+    socket: Socket
+}
 interface State { 
     selectedEvent: string,
     isEventMode: boolean
@@ -55,7 +58,11 @@ class Date extends PureComponent<Props, State> {
                         <Button variant="outlined" color="primary" onClick={this.handleJoinEvent}>Join Event!</Button>
                     </FormControl>
                 </Container>
-                { this.state.isEventMode ? <FullscreenCamera leaveEventFunc={this.handleLeaveEvent} /> : <TestCamera /> }
+                { this.state.isEventMode ? 
+                <FullscreenCamera 
+                    socket={this.props.socket} 
+                    leaveEventFunc={this.handleLeaveEvent} /> : 
+                <TestCamera /> }
             </div>
         )
     }
