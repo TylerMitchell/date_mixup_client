@@ -7,6 +7,7 @@ import Grid from "@material-ui/core/Grid"
 import URLS from "../helpers/environment";
 import { DB_Profile } from '../App';
 
+import adapter from 'webrtc-adapter';
 interface Props {
     leaveEventFunc: ()=>void,
     socket: Socket
@@ -18,7 +19,8 @@ interface State {
     otherProfile: DB_Profile | null,
     contactRequestRecieved: boolean,
     contactRequestSent: boolean,
-    contactRequestAccepted: boolean
+    contactRequestAccepted: boolean,
+    isInDate: boolean
 }
 
 class FullscreenCamera extends PureComponent<Props, State> {
@@ -36,7 +38,8 @@ class FullscreenCamera extends PureComponent<Props, State> {
             otherProfile: null,
             contactRequestRecieved: false,
             contactRequestSent: false,
-            contactRequestAccepted: false
+            contactRequestAccepted: false,
+            isInDate: false
         }
 
         this.videoRef = createRef<HTMLVideoElement>();
@@ -82,16 +85,19 @@ class FullscreenCamera extends PureComponent<Props, State> {
 
     gotRemoteMediaStream = (event: any) => {
         let vid = this.otherVideoRef.current;
-        console.log("Hit gotRemoteMediaStream!: ", event);
+        console.log("Hit gotRemoteMediaStream!: ", event.track);
         if(vid){
             if (event.streams && event.streams[0]) {
                 vid.srcObject = event.streams[0];
+                console.log("Hit a wierd condition in gotRemoteMediaStream!");
             } else {
                 let s = (!vid.srcObject) ? new MediaStream() : vid.srcObject as MediaStream;
+                s.addTrack(event.track);
+                console.log("Remote video source object: ", vid.srcObject);
                 vid.srcObject = s;
                 vid.autoplay = true;
-                this.setState({otherStream: s});
-                s.addTrack(event.track);
+                this.setState({otherStream: s, isInDate: true});
+                //s.addTrack(event.track);
             }
         }
         console.log("remote media stream should be added and visible!")
@@ -244,14 +250,14 @@ class FullscreenCamera extends PureComponent<Props, State> {
 
     closeCall = () => {
         if(this.socket && this.state.localPeerConnection){
-            this.socket.emit("End Date Client", { reason: "One of the Clients Hit End Date Button" } );
+            if( this.state.isInDate ){ this.socket.emit("End Date Client", { reason: "One of the Clients Hit End Date Button" } ); }
             this.state.localPeerConnection.close();
-            this.setState({ localPeerConnection: null, otherStream: null });
+            this.setState({ localPeerConnection: null, otherStream: null, isInDate: false });
 
             let vid = this.otherVideoRef.current;
             if(vid){ vid.srcObject = null; }
 
-            console.log("remote media stream should be removed")
+            console.log("remote media stream should be removed");
         }
     }
 
